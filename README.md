@@ -8,6 +8,8 @@ Currently only text-only private messages are restored.
 * Attachments are ignored.
 * Group Messages are currently also not copied. Most of the code has been prepared, but I am having issues with
   messages from senders that are no longer group members.
+* This script depends on the database format of both, signal desktop and whisperfish. Updates of either
+  may break functionality here.
 
 ## Usage
 
