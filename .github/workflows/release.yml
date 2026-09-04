@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+env:
+  BINARY_NAME: harbour-whisperfish-message-restore
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          ext=""
+          if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
+          go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
+            -o "dist/${BINARY_NAME}${ext}" ./cmd
+
+      - name: Package archive
+        id: package
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          name="${BINARY_NAME}_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}"
+          mkdir -p "release/${name}"
+          if [ "$GOOS" = "windows" ]; then
+            cp "dist/${BINARY_NAME}.exe" "release/${name}/"
+          else
+            cp "dist/${BINARY_NAME}" "release/${name}/"
+          fi
+          cp README.md "release/${name}/" 2>/dev/null || true
+
+          cd release
+          if [ "$GOOS" = "windows" ]; then
+            zip -r "${name}.zip" "${name}"
+            echo "asset=release/${name}.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czf "${name}.tar.gz" "${name}"
+            echo "asset=release/${name}.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}_${{ github.ref_name }}_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: ${{ steps.package.outputs.asset }}
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: sha256sum -- * > checksums.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          files: artifacts/*
+          generate_release_notes: true

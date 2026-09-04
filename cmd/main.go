@@ -11,9 +11,17 @@ import (
 
 var SignalDesktopFile = flag.String("signal-desktop-file", "", "Path to SQLite DB from signal desktop")
 var WhisperfishFile = flag.String("whisperfish-file", "", "Path to SQLite DB from whisperfish")
+var PrintVersion = flag.Bool("version", false, "Print the version and exit")
+
+// version is set at build time via -ldflags "-X main.version=...".
+var version = "dev"
 
 func main() {
 	flag.Parse()
+	if *PrintVersion {
+		fmt.Println(version)
+		return
+	}
 	if *SignalDesktopFile == "" {
 		log.Printf("--signal-desktop-file is required")
 		flag.PrintDefaults()
